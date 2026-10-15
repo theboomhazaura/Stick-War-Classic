@@ -8,27 +8,60 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100vw; height: 100vh; background: #000; overflow: hidden; }
     #container { width: 100vw; height: 100vh; }
+    #loader { color: #fff; font-family: sans-serif; text-align: center; margin-top: 20%; font-weight: bold; }
   </style>
 </head>
 <body>
 
+  <div id="loader">⚡ Assembling game data in memory...</div>
   <div id="container"></div>
 
-  <!-- Load Ruffle Emulator -->
   <script src="ruffle.js"></script>
   <script>
+    async function loadAndMergeChunks(chunkUrls) {
+      // Fetch both parts simultaneously
+      const responses = await Promise.all(chunkUrls.map(url => fetch(url)));
+      
+      // Verify both network fetches succeeded
+      for (const res of responses) {
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      }
+
+      const buffers = await Promise.all(responses.map(res => res.arrayBuffer()));
+      
+      // Stitch raw binary buffers back into a Flash Blob
+      return new Blob(buffers, { type: "application/x-shockwave-flash" });
+    }
+
     window.RufflePlayer = window.RufflePlayer || {};
-    window.addEventListener("load", (event) => {
-      const ruffle = window.RufflePlayer.newest();
-      const player = ruffle.createPlayer();
-      const container = document.getElementById("container");
-      container.appendChild(player);
+    window.addEventListener("load", async () => {
+      const loader = document.getElementById("loader");
       
-      // Load your .swf file here
-      player.load("Stick_Empires.swf");
-      
-      player.style.width = "100%";
-      player.style.height = "100%";
+      try {
+        // MATCH YOUR EXACT FILE NAMES HERE (e.g. chunk1, chunk2 or stickman.swf.001, etc.)
+        const swfBlob = await loadAndMergeChunks([
+          "part1",
+          "part2"
+        ]);
+        
+        // Create an in-memory Object URL for Ruffle
+        const swfUrl = URL.createObjectURL(swfBlob);
+
+        // Hide loader and spin up Ruffle player
+        loader.style.display = "none";
+        const ruffle = window.RufflePlayer.newest();
+        const player = ruffle.createPlayer();
+        const container = document.getElementById("container");
+        container.appendChild(player);
+
+        player.style.width = "100%";
+        player.style.height = "100%";
+
+        player.load(swfUrl);
+      } catch (err) {
+        loader.innerText = "❌ Load failed: " + err.message;
+        console.error("Chunk merging error:", err);
+      }
     });
   </script>
 </body>
